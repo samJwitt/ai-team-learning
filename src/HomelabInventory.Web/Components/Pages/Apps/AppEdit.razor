@@ -1,0 +1,120 @@
+@page "/apps/{Id:int}/edit"
+@rendermode InteractiveServer
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services
+@inject TrackedAppService AppService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit app</PageTitle>
+
+@if (notFound)
+{
+    <h1>App not found</h1>
+    <a class="btn btn-secondary" href="/apps">Back to apps</a>
+}
+else if (draft is not null)
+{
+    <h1>Edit @originalName</h1>
+
+    @if (errors.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <ul>
+                @foreach (var error in errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <EditForm Model="draft" OnValidSubmit="HandleSubmitAsync">
+        <div class="mb-3">
+            <label class="form-label">Name *</label>
+            <InputText class="form-control" @bind-Value="draft.Name" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <InputTextArea class="form-control" @bind-Value="draft.Description" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Host or IP *</label>
+            <InputText class="form-control" @bind-Value="draft.HostnameOrIp" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Port</label>
+            <InputNumber class="form-control" @bind-Value="draft.Port" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">URL</label>
+            <InputText class="form-control" @bind-Value="draft.Url" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Deployed on</label>
+            <InputText class="form-control" @bind-Value="draft.DeployedOn" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Served via</label>
+            <InputSelect class="form-control" @bind-Value="draft.ServedVia">
+                <option value="@ServedVia.Container">Container</option>
+                <option value="@ServedVia.Systemd">Systemd</option>
+                <option value="@ServedVia.Static">Static</option>
+                <option value="@ServedVia.Other">Other</option>
+            </InputSelect>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Proxy path</label>
+            <InputText class="form-control" @bind-Value="draft.ProxyPath" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Repository URL</label>
+            <InputText class="form-control" @bind-Value="draft.RepoUrl" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Branch</label>
+            <InputText class="form-control" @bind-Value="draft.Branch" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Container image</label>
+            <InputText class="form-control" @bind-Value="draft.ContainerImage" />
+        </div>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+        <a class="btn btn-secondary" href="/apps/@Id">Cancel</a>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TrackedApp? draft;
+    private string originalName = "";
+    private bool notFound;
+    private IReadOnlyList<string> errors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var app = await AppService.GetAsync(Id);
+        if (app is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        originalName = app.Name;
+        draft = app;
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        var result = await AppService.UpdateAsync(draft!);
+        if (result.Success)
+        {
+            Navigation.NavigateTo($"/apps/{Id}");
+        }
+        else
+        {
+            errors = result.Errors;
+        }
+    }
+}

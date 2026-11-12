@@ -1,0 +1,65 @@
+@page "/apps/{Id:int}"
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services
+@inject TrackedAppService AppService
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>@(app?.Name ?? "App not found")</PageTitle>
+
+@if (app is null)
+{
+    <h1>App not found</h1>
+    <p>The app you are looking for does not exist.</p>
+    <a class="btn btn-secondary" href="/apps">Back to apps</a>
+}
+else
+{
+    <h1>@app.Name</h1>
+
+    <dl class="row">
+        <dt class="col-sm-3">Description</dt>
+        <dd class="col-sm-9">@app.Description</dd>
+        <dt class="col-sm-3">Host or IP</dt>
+        <dd class="col-sm-9">@app.HostnameOrIp</dd>
+        <dt class="col-sm-3">Port</dt>
+        <dd class="col-sm-9">@app.Port</dd>
+        <dt class="col-sm-3">URL</dt>
+        <dd class="col-sm-9">@app.Url</dd>
+        <dt class="col-sm-3">Deployed on</dt>
+        <dd class="col-sm-9">@app.DeployedOn</dd>
+        <dt class="col-sm-3">Served via</dt>
+        <dd class="col-sm-9">@app.ServedVia</dd>
+        <dt class="col-sm-3">Proxy path</dt>
+        <dd class="col-sm-9">@app.ProxyPath</dd>
+        <dt class="col-sm-3">Repository URL</dt>
+        <dd class="col-sm-9">@app.RepoUrl</dd>
+        <dt class="col-sm-3">Branch</dt>
+        <dd class="col-sm-9">@app.Branch</dd>
+        <dt class="col-sm-3">Container image</dt>
+        <dd class="col-sm-9">@app.ContainerImage</dd>
+    </dl>
+
+    <a class="btn btn-primary" href="/apps/@app.Id/edit">Edit</a>
+    <a class="btn btn-outline-danger" href="/apps/@app.Id/delete">Delete</a>
+    <a class="btn btn-secondary" href="/apps">Back to apps</a>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TrackedApp? app;
+
+    protected override async Task OnInitializedAsync()
+    {
+        app = await AppService.GetAsync(Id);
+        if (app is null)
+        {
+            var http = HttpContextAccessor.HttpContext;
+            if (http is not null)
+            {
+                http.Response.StatusCode = StatusCodes.Status404NotFound;
+            }
+        }
+    }
+}

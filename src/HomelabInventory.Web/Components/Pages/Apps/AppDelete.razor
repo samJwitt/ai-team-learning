@@ -1,0 +1,41 @@
+@page "/apps/{Id:int}/delete"
+@rendermode InteractiveServer
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services
+@inject TrackedAppService AppService
+@inject NavigationManager Navigation
+
+<PageTitle>Delete app</PageTitle>
+
+@if (app is null)
+{
+    <h1>App not found</h1>
+    <a class="btn btn-secondary" href="/apps">Back to apps</a>
+}
+else
+{
+    <h1>Delete @app.Name?</h1>
+
+    <p>This permanently removes <strong>@app.Name</strong> from the inventory.</p>
+
+    <button class="btn btn-danger" @onclick="HandleDeleteAsync">Delete</button>
+    <a class="btn btn-secondary" href="/apps/@Id">Cancel</a>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TrackedApp? app;
+
+    protected override async Task OnInitializedAsync()
+    {
+        app = await AppService.GetAsync(Id);
+    }
+
+    private async Task HandleDeleteAsync()
+    {
+        await AppService.DeleteAsync(Id);
+        Navigation.NavigateTo("/apps");
+    }
+}

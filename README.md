@@ -19,3 +19,11 @@ dotnet run --project src/HomelabInventory.Web
 ```sh
 dotnet test
 ```
+
+## Tracked apps
+
+The inventory lives at the `/apps` route: list, add, view, edit, and delete
+tracked applications. Records are stored in SQLite; the database file lives at
+`App_Data/homelab.db` under the app's content root by default, configurable via
+the `Database:Path` setting in `appsettings.json`. The file is gitignored and
+data survives app restarts.

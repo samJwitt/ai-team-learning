@@ -1,0 +1,56 @@
+@page "/apps"
+@rendermode InteractiveServer
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services
+@inject TrackedAppService AppService
+
+<PageTitle>Tracked apps</PageTitle>
+
+<h1>Tracked apps</h1>
+
+<p>
+    <a class="btn btn-primary" href="/apps/new">Add app</a>
+</p>
+
+@if (apps.Count == 0)
+{
+    <p>No apps tracked yet. Use <strong>Add app</strong> to record one.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Host</th>
+                <th>Port</th>
+                <th>Served via</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var app in apps)
+            {
+                <tr>
+                    <td><a href="/apps/@app.Id">@app.Name</a></td>
+                    <td>@app.HostnameOrIp</td>
+                    <td>@app.Port</td>
+                    <td>@app.ServedVia</td>
+                    <td>
+                        <a href="/apps/@app.Id/edit">Edit</a>
+                        <a href="/apps/@app.Id/delete">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<TrackedApp> apps = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        apps = await AppService.ListAsync();
+    }
+}
