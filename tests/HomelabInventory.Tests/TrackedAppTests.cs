@@ -195,6 +195,91 @@ public sealed class TrackedAppTests : IDisposable
         Assert.DoesNotContain("FtpRepo", listHtml);
     }
 
+    /// <summary>
+    /// Regression (gate review on PR #2): in Blazor Server the scoped
+    /// DbContext/TrackedAppService lives for the whole circuit, so if reads
+    /// return change-tracked entities, edits abandoned in the form (never
+    /// submitted, never validated) are flushed by the NEXT SaveChangesAsync
+    /// of any operation in the same scope — bypassing server-side validation.
+    /// Reads must be AsNoTracking so an abandoned draft cannot leak.
+    /// </summary>
+    [Fact]
+    public async Task AbandonedEdit_DoesNotLeakIntoNextCreate_InSameScope()
+    {
+        await using var factory = CreateFactory();
+        var app1 = await CreateAppAsync(factory, "Grafana", a => a.Port = 3000);
+
+        // One scope simulates one interactive-server circuit spanning pages.
+        using (var circuit = factory.Services.CreateScope())
+        {
+            var service = circuit.ServiceProvider.GetRequiredService<TrackedAppService>();
+
+            // AppEdit binds its draft to the GetAsync result; the user types
+            // values that would fail validation, then navigates away without saving.
+            var draft = await service.GetAsync(app1.Id);
+            Assert.NotNull(draft);
+            draft.Name = "Abandoned Junk";
+            draft.Port = 70000; // invalid: must never reach the DB
+
+            // A different page in the same circuit successfully creates an app.
+            var created = await service.CreateAsync(
+                new TrackedApp { Name = "Jellyfin", HostnameOrIp = "nas.local" });
+            Assert.True(created.Success, string.Join("; ", created.Errors));
+        }
+
+        // Fresh scope reads the committed state of the database.
+        using var verify = factory.Services.CreateScope();
+        var verifyService = verify.ServiceProvider.GetRequiredService<TrackedAppService>();
+
+        var reloaded = await verifyService.GetAsync(app1.Id);
+        Assert.NotNull(reloaded);
+        Assert.Equal("Grafana", reloaded.Name);
+        Assert.Equal(3000, reloaded.Port);
+
+        var html = await factory.CreateClient().GetStringAsync($"/apps/{app1.Id}");
+        Assert.DoesNotContain("Abandoned Junk", html);
+    }
+
+    [Fact]
+    public async Task AbandonedEdit_DoesNotLeakIntoLaterUpdate_InSameScope()
+    {
+        await using var factory = CreateFactory();
+        var app1 = await CreateAppAsync(factory, "Gitea", a => a.Port = 3001);
+        var app2 = await CreateAppAsync(factory, "Uptime Kuma", a => a.Port = 3002);
+
+        using (var circuit = factory.Services.CreateScope())
+        {
+            var service = circuit.ServiceProvider.GetRequiredService<TrackedAppService>();
+
+            // Abandon an invalid edit on app1.
+            var abandoned = await service.GetAsync(app1.Id);
+            Assert.NotNull(abandoned);
+            abandoned.Port = 99999;
+            abandoned.Url = "not-a-valid-url";
+
+            // A detached draft of app2 is updated legitimately (the shape
+            // AppEdit uses after the AsNoTracking fix).
+            var draft2 = await service.GetAsync(app2.Id);
+            Assert.NotNull(draft2);
+            draft2.Description = "legit edit";
+            var result = await service.UpdateAsync(draft2);
+            Assert.True(result.Success, string.Join("; ", result.Errors));
+        }
+
+        using var verify = factory.Services.CreateScope();
+        var verifyService = verify.ServiceProvider.GetRequiredService<TrackedAppService>();
+
+        var reloaded1 = await verifyService.GetAsync(app1.Id);
+        Assert.NotNull(reloaded1);
+        Assert.Equal(3001, reloaded1.Port);
+        Assert.Null(reloaded1.Url);
+
+        // The legitimate update must still work with detached drafts.
+        var reloaded2 = await verifyService.GetAsync(app2.Id);
+        Assert.NotNull(reloaded2);
+        Assert.Equal("legit edit", reloaded2.Description);
+    }
+
     [Fact]
     public async Task DataWrittenByOneHost_IsReadableByASecondHostOnSameSqliteFile()
     {

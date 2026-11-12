@@ -33,11 +33,16 @@ public sealed record TrackedAppResult(
 /// </summary>
 public sealed class TrackedAppService(HomelabDbContext db)
 {
+    // Reads are AsNoTracking: in Blazor Server the scoped DbContext lives for
+    // the whole circuit, so a tracked entity handed to a form would have its
+    // abandoned edits flushed by the next SaveChangesAsync of an unrelated
+    // operation. UpdateAsync loads the entity itself, so detached drafts are
+    // the supported shape for edit forms.
     public async Task<List<TrackedApp>> ListAsync(CancellationToken ct = default) =>
-        await db.TrackedApps.OrderBy(a => a.NormalizedName).ToListAsync(ct);
+        await db.TrackedApps.AsNoTracking().OrderBy(a => a.NormalizedName).ToListAsync(ct);
 
     public Task<TrackedApp?> GetAsync(int id, CancellationToken ct = default) =>
-        db.TrackedApps.FirstOrDefaultAsync(a => a.Id == id, ct);
+        db.TrackedApps.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
 
     public async Task<TrackedAppResult> CreateAsync(TrackedApp app, CancellationToken ct = default)
     {
