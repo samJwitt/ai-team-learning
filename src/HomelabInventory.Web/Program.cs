@@ -1,6 +1,7 @@
 using HomelabInventory.Web.Components;
 using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Update;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,17 +24,25 @@ builder.Services.AddDbContext<HomelabDbContext>(options =>
 builder.Services.AddScoped<TrackedAppService>();
 builder.Services.AddHttpContextAccessor();
 
+// Update pipeline: one real implementation per interface (git CLI, docker
+// build, docker-over-ssh). Integration tests replace all three with fakes.
+builder.Services.AddSingleton<IGitSource, GitCliSource>();
+builder.Services.AddSingleton<IImageBuilder, DockerCliImageBuilder>();
+builder.Services.AddSingleton<IDeployer, SshDockerDeployer>();
+builder.Services.AddSingleton<UpdatePipelineService>();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
 
-// Create the schema on startup so data survives app restarts.
+// Apply EF Core migrations on startup (real migrations replace the old
+// EnsureCreated so existing installs gain new tables without data loss).
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<HomelabDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 // Configure the HTTP request pipeline.

@@ -44,6 +44,14 @@ public sealed class TrackedAppService(HomelabDbContext db)
     public Task<TrackedApp?> GetAsync(int id, CancellationToken ct = default) =>
         db.TrackedApps.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
 
+    /// <summary>The app's update runs, newest first (detail-page history).</summary>
+    public async Task<List<UpdateRun>> ListRunsAsync(int appId, CancellationToken ct = default) =>
+        await db.UpdateRuns.AsNoTracking()
+            .Where(r => r.TrackedAppId == appId)
+            .OrderByDescending(r => r.StartedAtUtc)
+            .ThenByDescending(r => r.Id)
+            .ToListAsync(ct);
+
     public async Task<TrackedAppResult> CreateAsync(TrackedApp app, CancellationToken ct = default)
     {
         var fieldErrors = ValidateFields(app);
