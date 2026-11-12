@@ -429,3 +429,6 @@ FodyWeavers.xsd
 
 .env
 .worktrees/
+
+# SQLite database for tracked apps
+App_Data/
