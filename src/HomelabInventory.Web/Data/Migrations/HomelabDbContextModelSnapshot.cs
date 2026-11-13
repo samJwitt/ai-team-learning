@@ -17,6 +17,55 @@ namespace HomelabInventory.Web.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("HomelabInventory.Web.Models.AppOperation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HostPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImageTag")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Log")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OldHost")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OldPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetHost")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TrackedAppId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrackedAppId", "StartedAtUtc");
+
+                    b.ToTable("AppOperations");
+                });
+
             modelBuilder.Entity("HomelabInventory.Web.Models.TrackedApp", b =>
                 {
                     b.Property<int>("Id")

@@ -6,9 +6,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace HomelabInventory.Tests.Services.Update;
 
 /// <summary>
-/// Shared recorder + failure switch for the three pipeline fakes. Set
-/// <see cref="FailAt"/> to one of fetch/build/transfer/restart to make that
-/// stage throw with canned command output.
+/// Shared recorder + failure switch for the pipeline fakes. Set
+/// <see cref="FailAt"/> to one of fetch/build/transfer/restart/teardown to
+/// make that stage throw with canned command output.
 /// </summary>
 public sealed class FakePipelineRig
 {
@@ -76,6 +76,12 @@ public sealed class FakeDeployer(FakePipelineRig rig) : IDeployer
     public (string Host, string Image, string Tag)? Transferred { get; private set; }
     public (string Host, string Container, string ImageTag, int? Port)? Restarted { get; private set; }
 
+    /// <summary>What a subsequent container-status check reports.</summary>
+    public bool ContainerRunning { get; set; } = true;
+
+    /// <summary>Every teardown executed, in call order.</summary>
+    public List<(string Host, string Container)> Teardowns { get; } = [];
+
     public Task TransferImageAsync(
         string targetHost, string image, string tag,
         Action<string> log, CancellationToken ct = default)
@@ -95,6 +101,26 @@ public sealed class FakeDeployer(FakePipelineRig rig) : IDeployer
         rig.Fail("restart", "container restart failed", rig.Marker("restart"));
         Restarted = (targetHost, containerName, imageTag, hostPort);
         log($"fake restart {containerName} on {targetHost}");
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> IsContainerRunningAsync(
+        string targetHost, string containerName,
+        Action<string> log, CancellationToken ct = default)
+    {
+        rig.Calls.Add("verify");
+        log($"fake verify {containerName} on {targetHost}: {ContainerRunning}");
+        return Task.FromResult(ContainerRunning);
+    }
+
+    public Task TeardownAsync(
+        string targetHost, string containerName,
+        Action<string> log, CancellationToken ct = default)
+    {
+        rig.Calls.Add("teardown");
+        rig.Fail("teardown", "container teardown failed", rig.Marker("teardown"));
+        Teardowns.Add((targetHost, containerName));
+        log($"fake teardown {containerName} on {targetHost}");
         return Task.CompletedTask;
     }
 }

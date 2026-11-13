@@ -80,4 +80,28 @@ public interface IDeployer
         int? hostPort,
         Action<string> log,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// True when containerName exists on targetHost and its docker state is
+    /// running. Any inspect failure (host unreachable, container missing)
+    /// reports false rather than throwing — callers treat "not verified up"
+    /// as a failed deployment.
+    /// </summary>
+    Task<bool> IsContainerRunningAsync(
+        string targetHost,
+        string containerName,
+        Action<string> log,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Stop and remove containerName on targetHost. An already-absent
+    /// container is treated as success (teardown is idempotent); other
+    /// failures throw <see cref="UpdateStepException"/> with step "deploy"
+    /// (same step namespace as the rest of <see cref="IDeployer"/>).
+    /// </summary>
+    Task TeardownAsync(
+        string targetHost,
+        string containerName,
+        Action<string> log,
+        CancellationToken ct = default);
 }

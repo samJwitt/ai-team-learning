@@ -1,0 +1,314 @@
+@rendermode InteractiveServer
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services.Apps
+@using HomelabInventory.Web.Services.Update
+@inject AppLifecycleService Lifecycle
+@inject TrackedAppService AppService
+@inject NavigationManager Navigation
+
+<h2 class="mt-5">Actions</h2>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success")">@message</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h3 class="card-title h4">Move</h3>
+        <p class="text-body-secondary">
+            Deploys the app at the new host and/or port first and only tears down the old
+            container after the new one is verified up. If the new deployment fails, the
+            current deployment keeps running.
+        </p>
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+                <label class="form-label" for="move-host">New host (leave as-is to keep)</label>
+                <input id="move-host" class="form-control" @bind="moveHost" placeholder="@currentHostHint" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label" for="move-port">New port (blank keeps current)</label>
+                <input id="move-port" class="form-control" @bind="movePort" placeholder="@currentPortHint" />
+            </div>
+            <div class="col-sm-3">
+                <button class="btn btn-primary" @onclick="MoveAsync" disabled="@busy">
+                    @if (busy && currentKind == AppOperationKind.Move)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <text>Moving…</text>
+                    }
+                    else
+                    {
+                        <text>Move app</text>
+                    }
+                </button>
+                @if (busy && currentKind == AppOperationKind.Move && currentStatus is not null)
+                {
+                    <span class="ms-2">@StatusBadge(currentStatus.Value)</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h3 class="card-title h4">Remove</h3>
+        @if (!confirmingRemove)
+        {
+            <p class="text-body-secondary">
+                Stops and removes the deployed container (an already-gone host or container is
+                skipped), then deletes this app's inventory record.
+            </p>
+            <button class="btn btn-outline-danger" @onclick="() => confirmingRemove = true" disabled="@busy">
+                Remove app…
+            </button>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                <strong>Are you sure?</strong> This tears down the deployed container and
+                permanently deletes the inventory record. This cannot be undone.
+                <div class="mt-2">
+                    <button class="btn btn-danger me-2" @onclick="RemoveAsync" disabled="@busy">
+                        @if (busy && currentKind == AppOperationKind.Remove)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <text>Removing…</text>
+                        }
+                        else
+                        {
+                            <text>Yes, remove permanently</text>
+                        }
+                    </button>
+                    <button class="btn btn-secondary" @onclick="() => confirmingRemove = false" disabled="@busy">
+                        Cancel
+                    </button>
+                    @if (busy && currentStatus is not null)
+                    {
+                        <span class="ms-2">@StatusBadge(currentStatus.Value)</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (shownLog is not null)
+{
+    <h3>Operation log @logHeader</h3>
+    <pre class="bg-body-tertiary p-3">@shownLog</pre>
+}
+
+<h3>Operation history</h3>
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Kind</th>
+            <th>Status</th>
+            <th>Started (UTC)</th>
+            <th>Completed (UTC)</th>
+            <th>Target</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (history.Count == 0)
+        {
+            <tr><td colspan="6">No moves or removals yet.</td></tr>
+        }
+        @foreach (var operation in history)
+        {
+            <tr>
+                <td>@operation.Kind</td>
+                <td>@StatusBadge(operation.Status)</td>
+                <td>@operation.StartedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                <td>@(operation.CompletedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+                <td>
+                    @if (operation.Kind == AppOperationKind.Move)
+                    {
+                        <text>@operation.OldHost:@(operation.OldPort == 0 ? "—" : operation.OldPort.ToString()) → @operation.TargetHost:@(operation.HostPort == 0 ? "—" : operation.HostPort.ToString())</text>
+                    }
+                    else
+                    {
+                        <text>@operation.TargetHost</text>
+                    }
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary"
+                            @onclick="() => ShowLog(operation)">View log</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter]
+    public int AppId { get; set; }
+
+    /// <summary>Raised after a successful move so the host page reloads the record.</summary>
+    [Parameter]
+    public EventCallback OnTargetChanged { get; set; }
+
+    private List<AppOperation> history = [];
+    private string moveHost = "";
+    private string movePort = "";
+    private bool confirmingRemove;
+    private bool busy;
+    private AppOperationKind? currentKind;
+    private AppOperationStatus? currentStatus;
+    private string? message;
+    private bool messageIsError;
+    private string? shownLog;
+    private string logHeader = "";
+    private string currentHostHint = "";
+    private string currentPortHint = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        history = await AppService.ListOperationsAsync(AppId);
+        var app = await AppService.GetAsync(AppId);
+        currentHostHint = app?.DeployedOn ?? "new host";
+        currentPortHint = app?.Port?.ToString() ?? "none";
+    }
+
+    private async Task MoveAsync()
+    {
+        // Reject junk port text client-side before the service ever sees it;
+        // the service still range-checks independently.
+        int? port = null;
+        if (!string.IsNullOrWhiteSpace(movePort))
+        {
+            if (!int.TryParse(movePort, out var parsed))
+            {
+                messageIsError = true;
+                message = "New port must be a number between 1 and 65535.";
+                return;
+            }
+            port = parsed;
+        }
+
+        busy = true;
+        message = null;
+        shownLog = null;
+        logHeader = "";
+        currentKind = AppOperationKind.Move;
+        currentStatus = AppOperationStatus.Queued;
+
+        var moveTask = Lifecycle.MoveAsync(AppId, moveHost, port);
+        await PollAsync(moveTask);
+
+        var result = await moveTask;
+        busy = false;
+        currentKind = null;
+        currentStatus = null;
+
+        if (!result.Started)
+        {
+            messageIsError = true;
+            message = string.Join(" ", result.Errors);
+        }
+        else
+        {
+            var operation = result.Operation!;
+            messageIsError = operation.Status != AppOperationStatus.Succeeded;
+            if (operation.Status == AppOperationStatus.Succeeded)
+            {
+                message = $"Moved to {operation.TargetHost}" +
+                          $":{(operation.HostPort == 0 ? "no port" : operation.HostPort.ToString())}.";
+                moveHost = "";
+                movePort = "";
+                confirmingRemove = false;
+                await OnTargetChanged.InvokeAsync();
+            }
+            else
+            {
+                message = "Move failed — the previous deployment was left untouched. " +
+                          "See the operation log below.";
+            }
+            shownLog = operation.Log;
+            logHeader = $"— Move {operation.Id}";
+            history = await AppService.ListOperationsAsync(AppId);
+        }
+    }
+
+    private async Task RemoveAsync()
+    {
+        busy = true;
+        message = null;
+        currentKind = AppOperationKind.Remove;
+        currentStatus = AppOperationStatus.Queued;
+
+        var removeTask = Lifecycle.RemoveAsync(AppId);
+        await PollAsync(removeTask);
+
+        var result = await removeTask;
+        busy = false;
+        currentKind = null;
+        currentStatus = null;
+
+        if (!result.Started)
+        {
+            confirmingRemove = false;
+            messageIsError = true;
+            message = string.Join(" ", result.Errors);
+            return;
+        }
+
+        var operation = result.Operation!;
+        if (operation.Status == AppOperationStatus.Succeeded)
+        {
+            // The record is gone — leave the page rather than render a dead app.
+            Navigation.NavigateTo("/apps");
+            return;
+        }
+
+        confirmingRemove = false;
+        messageIsError = true;
+        message = "Remove failed — see the operation log below.";
+        shownLog = operation.Log;
+        logHeader = $"— Remove {operation.Id}";
+        history = await AppService.ListOperationsAsync(AppId);
+    }
+
+    /// <summary>
+    /// Mirror of the update panel's progress loop: nudge the UI twice a second
+    /// with the newest persisted status while the operation is in flight.
+    /// </summary>
+    private async Task PollAsync(Task<LifecycleResult> task)
+    {
+        while (!task.IsCompleted)
+        {
+            await Task.WhenAny(task, Task.Delay(500));
+            if (!task.IsCompleted)
+            {
+                var operations = await AppService.ListOperationsAsync(AppId);
+                var inFlight = operations.FirstOrDefault(o => o.CompletedAtUtc is null);
+                currentStatus = inFlight?.Status ?? currentStatus;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void ShowLog(AppOperation operation)
+    {
+        shownLog = operation.Log;
+        logHeader = $"— {operation.Kind} {operation.StartedAtUtc:yyyy-MM-dd HH:mm:ss} UTC";
+    }
+
+    private static RenderFragment StatusBadge(AppOperationStatus status) => builder =>
+    {
+        var css = status switch
+        {
+            AppOperationStatus.Succeeded => "bg-success",
+            AppOperationStatus.Failed => "bg-danger",
+            AppOperationStatus.Queued => "bg-secondary",
+            _ => "bg-info text-dark",
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, status.ToString());
+        builder.CloseElement();
+    };
+}

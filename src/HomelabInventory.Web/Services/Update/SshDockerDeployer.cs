@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace HomelabInventory.Web.Services.Update;
 
 /// <summary>
@@ -8,14 +6,9 @@ namespace HomelabInventory.Web.Services.Update;
 /// <c>docker save</c> locally into <c>ssh &lt;vm&gt; docker load</c> — so no
 /// registry is required on the LAN.
 /// </summary>
-public sealed partial class SshDockerDeployer : IDeployer
+public sealed class SshDockerDeployer : IDeployer
 {
     private static readonly string[] SshOptions = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"];
-
-    // Everything interpolated into a remote command must be a plain
-    // host/image/container token; refuse anything with shell metacharacters.
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._:@/-]*$")]
-    private static partial Regex SafeToken();
 
     public async Task TransferImageAsync(
         string targetHost,
@@ -128,9 +121,65 @@ public sealed partial class SshDockerDeployer : IDeployer
             log, ct);
     }
 
+    public async Task<bool> IsContainerRunningAsync(
+        string targetHost,
+        string containerName,
+        Action<string> log,
+        CancellationToken ct = default)
+    {
+        EnsureSafe(targetHost);
+        EnsureSafe(containerName);
+
+        // Single argv to ssh; the remote command string contains only the
+        // allowlisted container name plus a static quoted format. '--' ends
+        // options so even allowlisted-looking values can't become flags.
+        // ignoreExitCode: an unreachable host or missing container is
+        // "not up", not a step failure — the caller decides what up/false means.
+        var output = await ProcessRunner.RunAsync(
+            "deploy", "ssh",
+            SshOptions.Append(targetHost).Append(
+                $"docker inspect -f '{{{{.State.Running}}}}' -- {containerName}").ToArray(),
+            log, ct, ignoreExitCode: true);
+
+        return output == "true";
+    }
+
+    public async Task TeardownAsync(
+        string targetHost,
+        string containerName,
+        Action<string> log,
+        CancellationToken ct = default)
+    {
+        EnsureSafe(targetHost);
+        EnsureSafe(containerName);
+
+        try
+        {
+            await ProcessRunner.RunAsync(
+                "deploy", "ssh",
+                SshOptions.Append(targetHost).Append(
+                    $"docker rm -f -- {containerName}").ToArray(),
+                log, ct);
+        }
+        catch (UpdateStepException ex)
+        {
+            // Removal semantics are "gone afterwards": docker exits non-zero
+            // with "No such container" when it is already absent, which is
+            // success for a teardown. Anything else (unreachable host,
+            // permission error) stays a failure for the caller to grade.
+            if (ex.Output.Contains("No such container", StringComparison.OrdinalIgnoreCase))
+            {
+                log($"Container '{containerName}' already gone on {targetHost}.");
+                return;
+            }
+
+            throw;
+        }
+    }
+
     private static void EnsureSafe(string token)
     {
-        if (!SafeToken().IsMatch(token))
+        if (!DeployToken.IsValid(token))
         {
             throw new UpdateStepException(
                 "deploy", $"'{token}' is not a valid host/image/container token.");
