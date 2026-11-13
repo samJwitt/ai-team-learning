@@ -1,6 +1,7 @@
 using System.Text;
 using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Models;
+using HomelabInventory.Web.Services.Apps;
 using Microsoft.EntityFrameworkCore;
 
 namespace HomelabInventory.Web.Services.Update;
@@ -159,8 +160,8 @@ public sealed class UpdatePipelineService(
             TrackedAppId = app.Id,
             Status = UpdateRunStatus.Queued,
             StartedAtUtc = DateTime.UtcNow,
-            Log = log.AppendLine($"Queued update of '{app.Name}' from {app.RepoUrl} (branch {branch})")
-                .ToString(),
+            Log = UpdateRunLog.Cap(log.AppendLine($"Queued update of '{app.Name}' from {app.RepoUrl} (branch {branch})")
+                .ToString()),
         };
         db.UpdateRuns.Add(run);
         await db.SaveChangesAsync(ct);
@@ -178,7 +179,7 @@ public sealed class UpdatePipelineService(
         var db = scope.ServiceProvider.GetRequiredService<HomelabDbContext>();
         var run = await db.UpdateRuns.FindAsync([runId], ct);
         run!.Status = status;
-        run.Log = log.ToString();
+        run.Log = UpdateRunLog.Cap(log.ToString());
         if (imageTag is not null)
         {
             run.ImageTag = imageTag;
@@ -197,7 +198,7 @@ public sealed class UpdatePipelineService(
         var run = await db.UpdateRuns.FindAsync([runId], ct);
         run!.Status = status;
         run.CompletedAtUtc = DateTime.UtcNow;
-        run.Log = log.ToString();
+        run.Log = UpdateRunLog.Cap(log.ToString());
         await db.SaveChangesAsync(ct);
     }
 
@@ -217,15 +218,47 @@ public sealed class UpdatePipelineService(
     }
 
     /// <summary>
-    /// Deterministic container name derived from the app name so restarts are
-    /// idempotent (hl-grafana, hl-home-assistant, ...).
+    /// Runs persist status only at stage transitions, so a killed process can
+    /// leave rows stuck in a non-terminal state forever. Called once at
+    /// startup: sweeps those to <see cref="UpdateRunStatus.Failed"/> with an
+    /// interruption note so the UI never shows a run that can never finish.
+    /// Returns the number of runs swept (also drives a startup log line).
+    /// </summary>
+    public static int MarkInterruptedRunsFailed(HomelabDbContext db)
+    {
+        var interrupted = db.UpdateRuns
+            .Where(r => r.Status != UpdateRunStatus.Succeeded
+                        && r.Status != UpdateRunStatus.Failed)
+            .ToList();
+
+        foreach (var run in interrupted)
+        {
+            run.Status = UpdateRunStatus.Failed;
+            run.CompletedAtUtc = DateTime.UtcNow;
+            run.Log = UpdateRunLog.Cap(
+                run.Log + "\n-- Interrupted: application stopped before this run finished.\n");
+        }
+
+        if (interrupted.Count > 0)
+        {
+            db.SaveChanges();
+        }
+
+        return interrupted.Count;
+    }
+
+    /// <summary>
+    /// Deterministic container name derived from the app name plus its
+    /// database id so restarts are idempotent AND two apps whose names slug
+    /// identically ("My App" vs "my-app") can never collide on the host
+    /// (hl-grafana-1, hl-home-assistant-2, ...).
     /// </summary>
     public static string ContainerName(TrackedApp app)
     {
         var slug = app.Name.ToLowerInvariant()
             .Select(c => char.IsLetterOrDigit(c) ? c : '-')
             .ToArray();
-        var name = "hl-" + new string(slug);
+        var name = $"hl-{new string(slug)}-{app.Id}";
         while (name.Contains("--", StringComparison.Ordinal))
         {
             name = name.Replace("--", "-", StringComparison.Ordinal);

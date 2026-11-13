@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace HomelabInventory.Web.Migrations
+namespace HomelabInventory.Web.Data.Migrations
 {
     [DbContext(typeof(HomelabDbContext))]
     partial class HomelabDbContextModelSnapshot : ModelSnapshot

@@ -1,6 +1,6 @@
 using HomelabInventory.Web.Components;
 using HomelabInventory.Web.Data;
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using HomelabInventory.Web.Services.Update;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -28,12 +28,15 @@ if (!Path.IsPathRooted(dbPath))
 }
 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
+// Data layer: SQLite-backed EF Core context (path above).
 builder.Services.AddDbContext<HomelabDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
+
+// Apps layer: server-side authority for TrackedApp CRUD/validation.
 builder.Services.AddScoped<TrackedAppService>();
 builder.Services.AddHttpContextAccessor();
 
-// Update pipeline: one real implementation per interface (git CLI, docker
+// Update layer: one real implementation per interface (git CLI, docker
 // build, docker-over-ssh). Integration tests replace all three with fakes.
 builder.Services.AddSingleton<IGitSource, GitCliSource>();
 builder.Services.AddSingleton<IImageBuilder, DockerCliImageBuilder>();
@@ -80,6 +83,16 @@ using (var scope = app.Services.CreateScope())
     }
 
     db.Database.Migrate();
+
+    // A run that was mid-flight when the previous process died can never
+    // advance; mark those Failed now instead of leaving them forever in
+    // Queued/Building/Pushing/Deploying.
+    var swept = UpdatePipelineService.MarkInterruptedRunsFailed(db);
+    if (swept > 0)
+    {
+        app.Logger.LogWarning(
+            "Marked {Count} interrupted update run(s) as Failed on startup.", swept);
+    }
 }
 
 // Configure the HTTP request pipeline.

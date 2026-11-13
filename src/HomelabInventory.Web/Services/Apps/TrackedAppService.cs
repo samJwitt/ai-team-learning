@@ -2,7 +2,7 @@ using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace HomelabInventory.Web.Services;
+namespace HomelabInventory.Web.Services.Apps;
 
 /// <summary>
 /// Outcome of a create/update/delete attempt. On failure, <see cref="Errors"/>
@@ -154,9 +154,9 @@ public sealed class TrackedAppService(HomelabDbContext db)
             errors.Add("URL must be an absolute http(s) address when set.");
         }
 
-        if (!IsHttpUrl(app.RepoUrl))
+        if (!GitRepoUrl.IsAllowed(app.RepoUrl))
         {
-            errors.Add("Repository URL must be an absolute http(s) address when set.");
+            errors.Add("Repository URL must start with https://, http://, git:// or ssh:// when set.");
         }
 
         return errors;

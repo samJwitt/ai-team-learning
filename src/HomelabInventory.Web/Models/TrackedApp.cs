@@ -2,7 +2,7 @@ namespace HomelabInventory.Web.Models;
 
 /// <summary>
 /// An application hosted on the LAN. <see cref="NormalizedName"/> is derived
-/// from <see cref="Name"/> by <see cref="Services.TrackedAppService"/> and is
+/// from <see cref="Name"/> by <see cref="Services.Apps.TrackedAppService"/> and is
 /// what the case-insensitive uniqueness constraint indexes on.
 /// </summary>
 public class TrackedApp

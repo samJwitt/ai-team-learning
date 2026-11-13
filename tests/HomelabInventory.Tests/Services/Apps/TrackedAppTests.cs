@@ -1,10 +1,10 @@
 using System.Net;
 using HomelabInventory.Web.Models;
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HomelabInventory.Tests;
+namespace HomelabInventory.Tests.Services.Apps;
 
 /// <summary>
 /// Integration tests for the tracked-app registry: the app runs via
@@ -193,6 +193,33 @@ public sealed class TrackedAppTests : IDisposable
         var listHtml = await factory.CreateClient().GetStringAsync("/apps");
         Assert.DoesNotContain("RelativeUrl", listHtml);
         Assert.DoesNotContain("FtpRepo", listHtml);
+    }
+
+    /// <summary>
+    /// Alignment hardening: RepoUrl accepts exactly the four git transports
+    /// (https/http/git/ssh) and rejects the git-argv injection class
+    /// (option-like values, ext:: arbitrary-command transport).
+    /// </summary>
+    [Theory]
+    [InlineData("git://git.kernel.org/pub/scm/app.git")]
+    [InlineData("ssh://git@10.0.0.5:2222/team/app.git")]
+    public async Task CreateApp_AcceptsGitTransportUrls(string repoUrl)
+    {
+        await using var factory = CreateFactory();
+        var result = await TryCreateAppAsync(factory, "GitTransport", a => a.RepoUrl = repoUrl);
+        Assert.True(result.Success, string.Join("; ", result.Errors));
+    }
+
+    [Theory]
+    [InlineData("ext::sh -c 'touch /tmp/pwned'")]
+    [InlineData("--upload-pack=evil")]
+    [InlineData("file:///home/me/secrets")]
+    public async Task CreateApp_RejectsHostileRepoUrls(string repoUrl)
+    {
+        await using var factory = CreateFactory();
+        var result = await TryCreateAppAsync(factory, "HostileRepo", a => a.RepoUrl = repoUrl);
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors, e => e.Contains("Repository URL"));
     }
 
     /// <summary>

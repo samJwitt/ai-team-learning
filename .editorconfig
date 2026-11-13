@@ -1,0 +1,55 @@
+# Aligned with the dominant style already present in this repo
+# (4-space indent, file-scoped namespaces, system usings first, braces
+# mandatory). See alignment card t_794ed540: this file codifies existing
+# practice; it introduces no new aesthetic.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,slnx,csproj}]
+indent_size = 2
+
+[*.cs]
+# Using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:error
+
+# Namespace style (all code already uses file-scoped)
+csharp_style_namespace_declarations = file_scoped:error
+
+# Braces: repo always uses braces and NewLines
+csharp_prefer_braces = true:error
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# var preference: repo uses explicit types where the type is not apparent
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Expression-bodied members: repo uses them for trivial accessors only
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_expression_bodied_accessors = when_on_single_line:suggestion
+csharp_style_expression_bodied_methods = false:suggestion
+
+# Tabs / indentation specifics
+tab_width = 4
+
+[*.razor]
+indent_size = 4
+
+# EF Core generates these (BOM + block namespaces); don't hold generated
+# code to the hand-style rules above.
+[**/Data/Migrations/**]
+charset = utf-8-bom
+generated_code = true
+csharp_style_namespace_declarations = present:none
+dotnet_diagnostic.IDE0161.severity = none

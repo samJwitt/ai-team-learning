@@ -1,8 +1,8 @@
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HomelabInventory.Tests;
+namespace HomelabInventory.Tests.Data;
 
 /// <summary>
 /// Regression test for the PR #3 review blocker: an install whose database was

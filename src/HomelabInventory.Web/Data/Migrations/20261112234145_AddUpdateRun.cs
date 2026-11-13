@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace HomelabInventory.Web.Migrations
+namespace HomelabInventory.Web.Data.Migrations
 {
     /// <inheritdoc />
     public partial class AddUpdateRun : Migration

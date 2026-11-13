@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace HomelabInventory.Tests;
+namespace HomelabInventory.Tests.Services.Update;
 
 /// <summary>
 /// Shared recorder + failure switch for the three pipeline fakes. Set

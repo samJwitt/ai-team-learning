@@ -1,10 +1,10 @@
 using System.Net;
 using HomelabInventory.Web.Models;
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using HomelabInventory.Web.Services.Update;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HomelabInventory.Tests;
+namespace HomelabInventory.Tests.Services.Update;
 
 /// <summary>
 /// Integration tests for the "Run update" pipeline: the real app hosted via
