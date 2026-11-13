@@ -1,10 +1,10 @@
 using System.Net;
 using HomelabInventory.Web.Models;
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HomelabInventory.Tests;
+namespace HomelabInventory.Tests.Services.Apps;
 
 /// <summary>
 /// Integration tests for the tracked-app registry: the app runs via

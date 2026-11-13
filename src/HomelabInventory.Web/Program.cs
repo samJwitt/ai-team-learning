@@ -1,6 +1,6 @@
 using HomelabInventory.Web.Components;
 using HomelabInventory.Web.Data;
-using HomelabInventory.Web.Services;
+using HomelabInventory.Web.Services.Apps;
 using HomelabInventory.Web.Services.Update;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;

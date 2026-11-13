@@ -2,7 +2,7 @@ using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace HomelabInventory.Web.Services;
+namespace HomelabInventory.Web.Services.Apps;
 
 /// <summary>
 /// Outcome of a create/update/delete attempt. On failure, <see cref="Errors"/>

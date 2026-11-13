@@ -1,6 +1,7 @@
 using System.Text;
 using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Models;
+using HomelabInventory.Web.Services.Apps;
 using Microsoft.EntityFrameworkCore;
 
 namespace HomelabInventory.Web.Services.Update;

@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace HomelabInventory.Web.Migrations
+namespace HomelabInventory.Web.Data.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

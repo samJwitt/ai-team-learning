@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace HomelabInventory.Web.Migrations
+namespace HomelabInventory.Web.Data.Migrations
 {
     [DbContext(typeof(HomelabDbContext))]
     [Migration("20261112234145_AddUpdateRun")]
