@@ -1,0 +1,150 @@
+@rendermode InteractiveServer
+@using HomelabInventory.Web.Models
+@using HomelabInventory.Web.Services
+@using HomelabInventory.Web.Services.Update
+@inject UpdatePipelineService Pipeline
+@inject TrackedAppService AppService
+
+<h2 class="mt-5">Updates</h2>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success")">@message</div>
+}
+
+<p>
+    <button class="btn btn-primary" @onclick="RunUpdateAsync" disabled="@running">
+        @if (running)
+        {
+            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+            <text>Updating…</text>
+        }
+        else
+        {
+            <text>Run update</text>
+        }
+    </button>
+    @if (running && current is not null)
+    {
+        <span class="ms-2">@StatusBadge(current.Value)</span>
+    }
+</p>
+
+@if (shownLog is not null)
+{
+    <h3>Run log @logHeader</h3>
+    <pre class="bg-body-tertiary p-3">@shownLog</pre>
+}
+
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Started (UTC)</th>
+            <th>Completed (UTC)</th>
+            <th>Image tag</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (history.Count == 0)
+        {
+            <tr><td colspan="5">No updates yet.</td></tr>
+        }
+        @foreach (var run in history)
+        {
+            <tr>
+                <td>@StatusBadge(run.Status)</td>
+                <td>@run.StartedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                <td>@(run.CompletedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+                <td>@run.ImageTag</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary"
+                            @onclick="() => ShowLog(run)">View log</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter]
+    public int AppId { get; set; }
+
+    private List<UpdateRun> history = [];
+    private UpdateRunStatus? current;
+    private bool running;
+    private string? message;
+    private bool messageIsError;
+    private string? shownLog;
+    private string logHeader = "";
+
+    protected override async Task OnInitializedAsync() =>
+        history = await AppService.ListRunsAsync(AppId);
+
+    private async Task RunUpdateAsync()
+    {
+        running = true;
+        message = null;
+        shownLog = null;
+        logHeader = "";
+        current = UpdateRunStatus.Queued;
+
+        var runTask = Pipeline.RunAsync(AppId);
+        while (!runTask.IsCompleted)
+        {
+            await Task.WhenAny(runTask, Task.Delay(500));
+            if (!runTask.IsCompleted)
+            {
+                // Pull the newest persisted status so the page tracks the
+                // pipeline stage by stage while it runs.
+                var runs = await AppService.ListRunsAsync(AppId);
+                var inFlight = runs.FirstOrDefault(r => r.CompletedAtUtc is null);
+                current = inFlight?.Status ?? current;
+                StateHasChanged();
+            }
+        }
+
+        var result = await runTask;
+        running = false;
+        current = null;
+
+        if (!result.Started)
+        {
+            messageIsError = true;
+            message = string.Join(" ", result.Errors);
+        }
+        else
+        {
+            var run = result.Run!;
+            messageIsError = run.Status != UpdateRunStatus.Succeeded;
+            message = run.Status == UpdateRunStatus.Succeeded
+                ? $"Update succeeded ({run.ImageTag})."
+                : "Update failed — see the run log below.";
+            shownLog = run.Log;
+            logHeader = $"— {run.ImageTag ?? run.Status.ToString()}";
+            history = await AppService.ListRunsAsync(AppId);
+        }
+    }
+
+    private void ShowLog(UpdateRun run)
+    {
+        shownLog = run.Log;
+        logHeader = $"— {run.StartedAtUtc:yyyy-MM-dd HH:mm:ss} UTC";
+    }
+
+    private static RenderFragment StatusBadge(UpdateRunStatus status) => builder =>
+    {
+        var css = status switch
+        {
+            UpdateRunStatus.Succeeded => "bg-success",
+            UpdateRunStatus.Failed => "bg-danger",
+            UpdateRunStatus.Queued => "bg-secondary",
+            _ => "bg-info text-dark",
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, status.ToString());
+        builder.CloseElement();
+    };
+}

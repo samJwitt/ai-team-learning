@@ -42,6 +42,8 @@ else
     <a class="btn btn-primary" href="/apps/@app.Id/edit">Edit</a>
     <a class="btn btn-outline-danger" href="/apps/@app.Id/delete">Delete</a>
     <a class="btn btn-secondary" href="/apps">Back to apps</a>
+
+    <AppUpdatePanel AppId="@app.Id" />
 }
 
 @code {
