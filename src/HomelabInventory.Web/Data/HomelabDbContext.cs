@@ -7,6 +7,7 @@ public class HomelabDbContext(DbContextOptions<HomelabDbContext> options) : DbCo
 {
     public DbSet<TrackedApp> TrackedApps => Set<TrackedApp>();
     public DbSet<UpdateRun> UpdateRuns => Set<UpdateRun>();
+    public DbSet<AppOperation> AppOperations => Set<AppOperation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,17 @@ public class HomelabDbContext(DbContextOptions<HomelabDbContext> options) : DbCo
                 .HasForeignKey(e => e.TrackedAppId)
                 .OnDelete(DeleteBehavior.Cascade);
             // The detail page's only run query is "this app's history, newest first".
+            entity.HasIndex(e => new { e.TrackedAppId, e.StartedAtUtc });
+        });
+
+        modelBuilder.Entity<AppOperation>(entity =>
+        {
+            entity.Property(e => e.Kind).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            // Deliberately NO HasOne<TrackedApp>/FK here: a Remove operation log
+            // must outlive the deletion of the app row it audited. TrackedAppId
+            // stays a plain column (no navigation property means EF convention
+            // does not create a relationship). Do not add cascade semantics.
             entity.HasIndex(e => new { e.TrackedAppId, e.StartedAtUtc });
         });
     }

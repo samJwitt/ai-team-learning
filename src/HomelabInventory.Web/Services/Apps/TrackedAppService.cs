@@ -52,6 +52,14 @@ public sealed class TrackedAppService(HomelabDbContext db)
             .ThenByDescending(r => r.Id)
             .ToListAsync(ct);
 
+    /// <summary>Move/remove audit history for the detail page, newest first.</summary>
+    public async Task<List<AppOperation>> ListOperationsAsync(int appId, CancellationToken ct = default) =>
+        await db.AppOperations.AsNoTracking()
+            .Where(o => o.TrackedAppId == appId)
+            .OrderByDescending(o => o.StartedAtUtc)
+            .ThenByDescending(o => o.Id)
+            .ToListAsync(ct);
+
     public async Task<TrackedAppResult> CreateAsync(TrackedApp app, CancellationToken ct = default)
     {
         var fieldErrors = ValidateFields(app);

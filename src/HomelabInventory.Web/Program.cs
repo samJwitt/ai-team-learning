@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IGitSource, GitCliSource>();
 builder.Services.AddSingleton<IImageBuilder, DockerCliImageBuilder>();
 builder.Services.AddSingleton<IDeployer, SshDockerDeployer>();
 builder.Services.AddSingleton<UpdatePipelineService>();
+builder.Services.AddSingleton<AppLifecycleService>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -92,6 +93,14 @@ using (var scope = app.Services.CreateScope())
     {
         app.Logger.LogWarning(
             "Marked {Count} interrupted update run(s) as Failed on startup.", swept);
+    }
+
+    // Same reasoning for lifecycle operations (move/remove) as for runs.
+    var sweptOps = AppLifecycleService.MarkInterruptedOperationsFailed(db);
+    if (sweptOps > 0)
+    {
+        app.Logger.LogWarning(
+            "Marked {Count} interrupted lifecycle operation(s) as Failed on startup.", sweptOps);
     }
 }
 

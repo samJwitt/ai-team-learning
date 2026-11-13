@@ -44,6 +44,7 @@ else
     <a class="btn btn-secondary" href="/apps">Back to apps</a>
 
     <AppUpdatePanel AppId="@app.Id" />
+    <AppLifecyclePanel AppId="@app.Id" OnTargetChanged="ReloadAsync" />
 }
 
 @code {
@@ -64,4 +65,7 @@ else
             }
         }
     }
+
+    /// <summary>Re-read the record after a move changed the deployment target.</summary>
+    private async Task ReloadAsync() => app = await AppService.GetAsync(Id);
 }
