@@ -29,10 +29,13 @@ the `Database:Path` setting in `appsettings.json`. The file is gitignored and
 data survives app restarts.
 
 Schema changes are applied with real EF Core migrations on startup
-(`db.Database.Migrate()`) so existing installs gain new tables without data
-loss. Migration tooling (dotnet-ef 10.0.x) is pinned in
-`.config/dotnet-tools.json`; run `dotnet tool restore` before adding a
-migration.
+(`db.Database.Migrate()`). Installs whose database was created by the old
+`EnsureCreated()` (tables but no migration history) are handled on first boot:
+startup detects the schema, stamps `InitialCreate` into
+`__EFMigrationsHistory`, and applies only later migrations on top — existing
+data is kept and no tables are recreated. Migration tooling (dotnet-ef 10.0.x)
+is pinned in `.config/dotnet-tools.json`; run `dotnet tool restore` before
+adding a migration.
 
 ## Run update
 

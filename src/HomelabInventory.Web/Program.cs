@@ -3,6 +3,15 @@ using HomelabInventory.Web.Data;
 using HomelabInventory.Web.Services;
 using HomelabInventory.Web.Services.Update;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+
+// Baseline identity for pre-migration installs (databases built by the old
+// EnsureCreated()). Must match the InitialCreate migration id and the
+// ProductVersion annotation in HomelabDbContextModelSnapshot; regenerate this
+// pair if the baseline migration is ever replaced.
+const string InitialCreateMigrationId = "20261112234138_InitialCreate";
+const string InitialCreateProductVersion = "10.0.15";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,9 +48,37 @@ var app = builder.Build();
 
 // Apply EF Core migrations on startup (real migrations replace the old
 // EnsureCreated so existing installs gain new tables without data loss).
+// Databases created by the old EnsureCreated() have the tables but no
+// __EFMigrationsHistory, so Migrate() would replay InitialCreate and crash
+// with SqliteException "table \"TrackedApps\" already exists". Detect that
+// state and stamp the baseline first; Migrate() then applies only the later
+// migrations on top of the existing schema.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<HomelabDbContext>();
+
+    if (!db.Database.GetAppliedMigrations().Any())
+    {
+        var creator = db.GetService<IRelationalDatabaseCreator>();
+        if (creator.HasTables())
+        {
+            db.Database.ExecuteSqlRaw(
+                """
+                CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+                    "MigrationId" TEXT NOT NULL CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY,
+                    "ProductVersion" TEXT NOT NULL
+                );
+                """);
+            db.Database.ExecuteSqlRaw(
+                """
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ({0}, {1});
+                """,
+                InitialCreateMigrationId,
+                InitialCreateProductVersion);
+        }
+    }
+
     db.Database.Migrate();
 }
 
